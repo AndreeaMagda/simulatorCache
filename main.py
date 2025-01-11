@@ -160,6 +160,8 @@ class CacheSimulatorApp:
 
     def process_instructions(self, FR, IR, IBS):
         TICKS = 0
+        executed_instructions = 0  
+
         with open("log.txt", "w") as log_file:
             log_file.write("Simulation Log:\n")
             log_file.write("=================\n")
@@ -173,6 +175,7 @@ class CacheSimulatorApp:
                 print(f"Cache size before fetch: {len(self.cache)}")
                 print(f"IBS size before fetch: {len(self.ibs)}")
 
+                # Fetch instrucțiuni
                 fetched_count = 0
                 while len(self.ibs) < IBS and self.cache:
                     for _ in range(FR):
@@ -185,11 +188,13 @@ class CacheSimulatorApp:
 
                 log_file.write(f"Fetched {fetched_count} instructions into IBS. IBS size: {len(self.ibs)}\n")
 
+                # Execute instrucțiuni
                 executed_count = 0
                 for _ in range(IR):
                     if self.ibs:
                         instr = self.ibs.pop(0)
                         executed_count += 1
+                        executed_instructions += 1
                         print(f"Executed: {instr.tip_instructiune}, PC: {instr.pc_curent}, Address: {instr.address}")
                         log_file.write(
                             f"Executed: {instr.tip_instructiune}, PC: {instr.pc_curent}, Address: {instr.address}\n")
@@ -199,8 +204,18 @@ class CacheSimulatorApp:
 
                 TICKS += 1
 
-            print(f"\nExecution completed in {TICKS} cycles.")
+
+            issue_rate = executed_instructions / TICKS if TICKS > 0 else 0
             log_file.write(f"\nExecution completed in {TICKS} cycles.\n")
+            log_file.write(f"Total executed instructions: {executed_instructions}\n")
+            log_file.write(f"Issue Rate: {issue_rate:.2f}\n")
+
+
+            self.issue_rate_entry.delete(0, tk.END)
+            self.issue_rate_entry.insert(0, f"{issue_rate:.2f}")
+
+        print(f"\nExecution completed in {TICKS} cycles.")
+        print(f"Issue Rate: {issue_rate:.2f}")
 
 
 if __name__ == "__main__":
