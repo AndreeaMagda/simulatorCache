@@ -30,16 +30,6 @@ class CacheSimulatorApp:
         self.ibs_combobox.grid(row=2, column=1)
         self.ibs_combobox.set(4)
 
-        ttk.Label(parameters_frame, text="Latenta (for hit in cache):").grid(row=3, column=0, sticky="w")
-        self.latency_combobox = ttk.Combobox(parameters_frame, values=[1, 2, 5, 10])
-        self.latency_combobox.grid(row=3, column=1)
-        self.latency_combobox.set(1)
-
-        ttk.Label(parameters_frame, text="N_PEN (miss in cache):").grid(row=4, column=0, sticky="w")
-        self.n_pen_combobox = ttk.Combobox(parameters_frame, values=[5, 10, 15, 20])
-        self.n_pen_combobox.grid(row=4, column=1)
-        self.n_pen_combobox.set(10)
-
         ttk.Label(parameters_frame, text="Nr. Set Regiştri:").grid(row=5, column=0, sticky="w")
         self.reg_combobox = ttk.Combobox(parameters_frame, values=[1, 2, 4, 8])
         self.reg_combobox.grid(row=5, column=1)
@@ -112,30 +102,51 @@ class CacheSimulatorApp:
             print("Niciun fişier selectat!")
             return
 
-        # Citire parametri din interfață
-        n_pen = int(self.n_pen_combobox.get())
-        block_size = int(self.ic_block_combobox.get())
+
+        TICKS = 0
+        nrInstrProcesate = 0
+        nrBranchProcesate = 0
+        nrStoreProcesate = 0
+        nrLoadProcesate = 0
+        nrArithProcesate = 0
+
+
+        acceseDisponibileLaMemoriePerCiclu = 1 
 
 
         instructions = parse_file(self.file_path)
 
-        load_count = sum(1 for instr in instructions if instr.tip_instructiune == 'L')
-        store_count = sum(1 for instr in instructions if instr.tip_instructiune == 'S')
-        branch_count = sum(1 for instr in instructions if instr.tip_instructiune in ['BS', 'BM', 'BT', 'NT'])
+        for instr in instructions:
+            nrInstrProcesate += 1
 
-        total_count = len(instructions)
+            if instr.tip_instructiune in ['BS', 'BM', 'BT', 'NT', 'BR']:
+                nrBranchProcesate += 1
+                TICKS += acceseDisponibileLaMemoriePerCiclu
+            elif instr.tip_instructiune == 'S':
+                nrStoreProcesate += 1
+                TICKS += acceseDisponibileLaMemoriePerCiclu
+            elif instr.tip_instructiune == 'L':
+                nrLoadProcesate += 1
+                TICKS += acceseDisponibileLaMemoriePerCiclu
+            else:
+                nrArithProcesate += 1
+                TICKS += 1
+
+
+        self.ticks_entry.delete(0, tk.END)
+        self.ticks_entry.insert(0, str(TICKS))
 
         self.load_entry.delete(0, tk.END)
-        self.load_entry.insert(0, str(load_count))
+        self.load_entry.insert(0, str(nrLoadProcesate))
+
         self.store_entry.delete(0, tk.END)
-        self.store_entry.insert(0, str(store_count))
+        self.store_entry.insert(0, str(nrStoreProcesate))
+
         self.branch_entry.delete(0, tk.END)
-        self.branch_entry.insert(0, str(branch_count))
+        self.branch_entry.insert(0, str(nrBranchProcesate))
+
         self.total_entry.delete(0, tk.END)
-        self.total_entry.insert(0, str(total_count))
-
-
-
+        self.total_entry.insert(0, str(nrInstrProcesate))
 
 
 if __name__ == "__main__":
