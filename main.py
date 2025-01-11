@@ -110,6 +110,14 @@ class CacheSimulatorApp:
             print("Niciun fişier selectat!")
             return
 
+        self.cache = parse_file(self.file_path)
+        self.ibs = []
+
+        FR = int(self.fr_combobox.get())
+        IR = int(self.irmax_combobox.get())
+        IBS = int(self.ibs_combobox.get())
+        self.process_instructions(FR, IR, IBS)
+
         TICKS = 0
         nrInstrProcesate = 0
         nrBranchProcesate = 0
@@ -149,6 +157,50 @@ class CacheSimulatorApp:
 
         self.total_entry.delete(0, tk.END)
         self.total_entry.insert(0, str(nrInstrProcesate))
+
+    def process_instructions(self, FR, IR, IBS):
+        TICKS = 0
+        with open("log.txt", "w") as log_file:
+            log_file.write("Simulation Log:\n")
+            log_file.write("=================\n")
+
+            while self.cache or self.ibs:
+                log_file.write(f"\n--- TICK {TICKS + 1} ---\n")
+                log_file.write(f"Cache size before fetch: {len(self.cache)}\n")
+                log_file.write(f"IBS size before fetch: {len(self.ibs)}\n")
+
+                print(f"\n--- TICK {TICKS + 1} ---")
+                print(f"Cache size before fetch: {len(self.cache)}")
+                print(f"IBS size before fetch: {len(self.ibs)}")
+
+                fetched_count = 0
+                while len(self.ibs) < IBS and self.cache:
+                    for _ in range(FR):
+                        if self.cache and len(self.ibs) < IBS:
+                            instr = self.cache.pop(0)
+                            self.ibs.append(instr)
+                            fetched_count += 1
+                            log_file.write(
+                                f"Fetched: {instr.tip_instructiune}, PC: {instr.pc_curent}, Address: {instr.address}\n")
+
+                log_file.write(f"Fetched {fetched_count} instructions into IBS. IBS size: {len(self.ibs)}\n")
+
+                executed_count = 0
+                for _ in range(IR):
+                    if self.ibs:
+                        instr = self.ibs.pop(0)
+                        executed_count += 1
+                        print(f"Executed: {instr.tip_instructiune}, PC: {instr.pc_curent}, Address: {instr.address}")
+                        log_file.write(
+                            f"Executed: {instr.tip_instructiune}, PC: {instr.pc_curent}, Address: {instr.address}\n")
+
+                log_file.write(
+                    f"Executed {executed_count} instructions from IBS. IBS size after execution: {len(self.ibs)}\n")
+
+                TICKS += 1
+
+            print(f"\nExecution completed in {TICKS} cycles.")
+            log_file.write(f"\nExecution completed in {TICKS} cycles.\n")
 
 
 if __name__ == "__main__":
