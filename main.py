@@ -93,6 +93,14 @@ class CacheSimulatorApp:
 
         self.file_path = None
 
+        # Lista  de instrucțiuni
+        instruction_list_frame = ttk.LabelFrame(root, text="Lista Instrucțiuni")
+        instruction_list_frame.grid(row=3, column=0, columnspan=2, padx=10, pady=10, sticky="nsew")
+
+        self.instruction_listbox = tk.Listbox(instruction_list_frame, height=10, width=50)
+        self.instruction_listbox.grid(row=0, column=0, sticky="nsew")
+
+
     def choose_file(self):
         self.file_path = filedialog.askopenfilename()
         print(f"Fişier selectat: {self.file_path}")
@@ -102,36 +110,30 @@ class CacheSimulatorApp:
             print("Niciun fişier selectat!")
             return
 
-
         TICKS = 0
         nrInstrProcesate = 0
         nrBranchProcesate = 0
         nrStoreProcesate = 0
         nrLoadProcesate = 0
-        nrArithProcesate = 0
 
+        self.instructions = parse_file(self.file_path)
+        self.instruction_listbox.delete(0, tk.END)
 
-        acceseDisponibileLaMemoriePerCiclu = 1 
+        for instr in self.instructions:
+            display_text = f"{instr.tip_instructiune} - PC: {instr.pc_curent}, Address: {instr.address}"
+            self.instruction_listbox.insert(tk.END, display_text)
 
+        nrInstrProcesate = len(self.instructions)
+        nrBranchProcesate = sum(
+            1 for instr in self.instructions if instr.tip_instructiune in ['BS', 'BM', 'BT', 'NT', 'BR'])
+        nrStoreProcesate = sum(1 for instr in self.instructions if instr.tip_instructiune == 'S')
+        nrLoadProcesate = sum(1 for instr in self.instructions if instr.tip_instructiune == 'L')
 
-        instructions = parse_file(self.file_path)
-
-        for instr in instructions:
-            nrInstrProcesate += 1
-
+        for instr in self.instructions:
             if instr.tip_instructiune in ['BS', 'BM', 'BT', 'NT', 'BR']:
-                nrBranchProcesate += 1
-                TICKS += acceseDisponibileLaMemoriePerCiclu
-            elif instr.tip_instructiune == 'S':
-                nrStoreProcesate += 1
-                TICKS += acceseDisponibileLaMemoriePerCiclu
-            elif instr.tip_instructiune == 'L':
-                nrLoadProcesate += 1
-                TICKS += acceseDisponibileLaMemoriePerCiclu
-            else:
-                nrArithProcesate += 1
                 TICKS += 1
-
+            elif instr.tip_instructiune in ['S', 'L']:
+                TICKS += 1
 
         self.ticks_entry.delete(0, tk.END)
         self.ticks_entry.insert(0, str(TICKS))
