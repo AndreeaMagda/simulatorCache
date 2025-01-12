@@ -93,6 +93,18 @@ class CacheSimulatorApp:
 
         self.file_path = None
 
+        # Write Policy Selection
+        ttk.Label(parameters_frame, text="Write Policy:").grid(row=3, column=0, sticky="w")
+        self.write_policy_var = tk.StringVar(value="write-through")  # Default is write-through
+        self.write_through_radio = ttk.Radiobutton(
+            parameters_frame, text="Write-Through", variable=self.write_policy_var, value="write-through"
+        )
+        self.write_through_radio.grid(row=3, column=1, sticky="w")
+        self.write_back_radio = ttk.Radiobutton(
+            parameters_frame, text="Write-Back", variable=self.write_policy_var, value="write-back"
+        )
+        self.write_back_radio.grid(row=3, column=2, sticky="w")
+
         # Lista  de instrucțiuni
         instruction_list_frame = ttk.LabelFrame(root, text="Lista Instrucțiuni")
         instruction_list_frame.grid(row=3, column=0, columnspan=2, padx=10, pady=10, sticky="nsew")
