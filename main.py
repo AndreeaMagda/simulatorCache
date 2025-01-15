@@ -200,7 +200,6 @@ class CacheSimulatorApp:
             return
 
         self.instructions = parse_file(self.file_path)
-        self.instruction_listbox.delete(0, tk.END)
 
         with open("log.txt", "w") as log_file, open("cachelog.txt", "w") as cache_log:
             log_file.write("Simulation Log:\n")
@@ -212,16 +211,84 @@ class CacheSimulatorApp:
             cache = [{"address": None, "dirty_bit": 0} for _ in range(16)]
             write_policy = self.write_policy_var.get()
 
-            for instr in self.instructions:
-                if instr.tip_instructiune == "S":  # Store
-                    self.simulate_write(cache, instr.address, write_policy, cache_log)
-                elif instr.tip_instructiune == "L":  # Load
-                    self.simulate_read(cache, instr.address, cache_log)
+            ticks = 0
+            fetched_instructions = []
 
-                display_text = f"{instr.tip_instructiune} - PC: {instr.pc_curent}, Address: {instr.address}"
-                self.instruction_listbox.insert(tk.END, display_text)
+            FR = int(self.fr_combobox.get())
+            IR = int(self.irmax_combobox.get())
+            IBS = int(self.ibs_combobox.get())
+            self.ibs = []
+            executed_instructions = 0
 
-        self.generate_graphs()
+            nr_load = 0
+            nr_store = 0
+            nr_branch = 0
+
+            while self.instructions or self.ibs:
+                ticks += 1
+                log_file.write(f"\n--- TICK {ticks} ---\n")
+                log_file.write(f"Cache size before fetch: {len(self.instructions)}\n")
+                log_file.write(f"IBS size before fetch: {len(self.ibs)}\n")
+
+                # Fetch instructions
+                fetched_count = 0
+                while len(self.ibs) < IBS and self.instructions:
+                    for _ in range(FR):
+                        if self.instructions and len(self.ibs) < IBS:
+                            instr = self.instructions.pop(0)
+                            self.ibs.append(instr)
+                            fetched_count += 1
+                            log_file.write(
+                                f"Fetched: {instr.tip_instructiune}, PC: {instr.pc_curent}, Address: {instr.address}\n")
+
+                log_file.write(f"Fetched {fetched_count} instructions into IBS. IBS size: {len(self.ibs)}\n")
+
+                # Execute instructions
+                executed_count = 0
+                for _ in range(IR):
+                    if self.ibs:
+                        instr = self.ibs.pop(0)
+                        executed_count += 1
+                        executed_instructions += 1
+                        log_file.write(
+                            f"Executed: {instr.tip_instructiune}, PC: {instr.pc_curent}, Address: {instr.address}\n")
+
+                        if instr.tip_instructiune == 'L':
+                            nr_load += 1
+                            self.simulate_read(cache, instr.address, cache_log)
+                        elif instr.tip_instructiune == 'S':
+                            nr_store += 1
+                            self.simulate_write(cache, instr.address, write_policy, cache_log)
+                        elif instr.tip_instructiune in ['BS', 'BM', 'BT', 'NT', 'BR','B']:
+                            nr_branch += 1
+
+                log_file.write(
+                    f"Executed {executed_count} instructions from IBS. IBS size after execution: {len(self.ibs)}\n")
+
+            issue_rate = executed_instructions / ticks if ticks > 0 else 0
+            log_file.write(f"\nExecution completed in {ticks} ticks.\n")
+            log_file.write(f"Total executed instructions: {executed_instructions}\n")
+            log_file.write(f"Issue Rate: {issue_rate:.2f}\n")
+
+            print(f"\nExecution completed in {ticks} cycles.")
+            print(f"Issue Rate: {issue_rate:.2f}")
+
+            # Update UI fields
+            self.ticks_entry.delete(0, tk.END)
+            self.ticks_entry.insert(0, str(ticks))
+
+            self.load_entry.delete(0, tk.END)
+            self.load_entry.insert(0, str(nr_load))
+
+            self.store_entry.delete(0, tk.END)
+            self.store_entry.insert(0, str(nr_store))
+
+            self.branch_entry.delete(0, tk.END)
+            self.branch_entry.insert(0, str(nr_branch))
+
+            self.total_entry.delete(0, tk.END)
+            self.total_entry.insert(0, str(executed_instructions))
+
 
 if __name__ == "__main__":
     root = tk.Tk()
