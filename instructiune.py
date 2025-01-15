@@ -1,17 +1,20 @@
-class Instructiune:
+class Instruction:
     def __init__(self, tip_instructiune, pc_curent, address):
         self.tip_instructiune = tip_instructiune
-        self.pc_curent = pc_curent
-        self.address = address
+        self.pc_curent = int(pc_curent)
+        self.address = int(address)
 
 def parse_file(file_path):
     instructions = []
-    with open(file_path, 'r') as file:
+    with open(file_path, "r") as file:
         for line in file:
-            parts = line.strip().split()
-            if len(parts) == 3:
-                tip = parts[0]
-                pc = int(parts[1])
-                address = int(parts[2])
-                instructions.append(Instructiune(tip, pc, address))
+            # Încearcă să desparți datele pe spații
+            parts = line.split()
+            if len(parts) >= 3:  # Asigură-te că ai minim 3 coloane
+                tip_instructiune = parts[0]  # Primul element
+                pc_curent = parts[1]  # Al doilea element
+                address = parts[2]  # Al treilea element
+                # Creează un obiect de tip Instruction
+                instructions.append(Instruction(tip_instructiune, pc_curent, address))
     return instructions
+

@@ -112,6 +112,19 @@ class CacheSimulatorApp:
         self.instruction_listbox = tk.Listbox(instruction_list_frame, height=10, width=50)
         self.instruction_listbox.grid(row=0, column=0, sticky="nsew")
 
+    def simulate_write(self, cache, address, write_policy, data):
+        if write_policy == "write-through":
+            # Scrie direct în memorie și actualizează cache-ul
+            print(f"Write-through: Scriere la adresa {address}")
+            # Aici adaugi logica de scriere
+        elif write_policy == "write-back":
+            # Marchează cache-ul ca fiind murdar și scrie doar când este necesar
+            print(f"Write-back: Scriere la adresa {address}")
+            # Aici adaugi logica de scriere
+        else:
+            raise ValueError(f"Politica de scriere necunoscută: {write_policy}")
+
+
 
     def choose_file(self):
         self.file_path = filedialog.askopenfilename()
@@ -124,6 +137,8 @@ class CacheSimulatorApp:
 
         self.cache = parse_file(self.file_path)
         self.ibs = []
+        cache = [{"address": None, "dirty_bit": 0} for _ in range(16)]  # Cache simplu cu 16 blocuri
+        write_policy = self.write_policy_var.get()  # Selectează politica de scriere (write-through/write-back)
 
         FR = int(self.fr_combobox.get())
         IR = int(self.irmax_combobox.get())
@@ -149,10 +164,20 @@ class CacheSimulatorApp:
         nrStoreProcesate = sum(1 for instr in self.instructions if instr.tip_instructiune == 'S')
         nrLoadProcesate = sum(1 for instr in self.instructions if instr.tip_instructiune == 'L')
 
+        # Inițializează cache-ul și preia politica de scriere selectată
+        cache = [{"address": None, "dirty_bit": 0} for _ in range(16)]  # Cache simplu cu 16 blocuri
+        write_policy = self.write_policy_var.get()  # Selectează politica de scriere (write-through/write-back)
+        TICKS = 0
+
+        # Parcurge instrucțiunile
         for instr in self.instructions:
             if instr.tip_instructiune in ['BS', 'BM', 'BT', 'NT', 'BR']:
+                TICKS += 1  # Alte tipuri de instrucțiuni, incrementăm doar TICKS
+            elif instr.tip_instructiune == 'S':  # Instrucțiune de scriere
+                self.simulate_write(cache, instr.address, write_policy, None)
                 TICKS += 1
-            elif instr.tip_instructiune in ['S', 'L']:
+            elif instr.tip_instructiune == 'L':  # Instrucțiune de citire
+                self.simulate_read(cache, instr.address, None)
                 TICKS += 1
 
         self.ticks_entry.delete(0, tk.END)
@@ -228,6 +253,47 @@ class CacheSimulatorApp:
 
         print(f"\nExecution completed in {TICKS} cycles.")
         print(f"Issue Rate: {issue_rate:.2f}")
+
+
+
+        def simulate_write(self, cache, address, write_policy, log_file):
+            block_index = address % len(cache)
+            block = cache[block_index]
+
+            if write_policy == "write-through":
+                log_file.write(f"Write-through: Writing to cache and memory at address {address}\n")
+            elif write_policy == "write-back":
+                if block["address"] is not None and block["address"] != address and block["dirty_bit"] == 1:
+                    log_file.write(f"Evicting dirty block {block['address']} to memory\n")
+                block["dirty_bit"] = 1
+                log_file.write(f"Write-back: Writing to cache at address {address}\n")
+
+            block["address"] = address
+
+        def simulate_read(self, cache, address, log_file):
+            block_index = address % len(cache)
+            block = cache[block_index]
+
+            if block["address"] == address:
+                log_file.write(f"Cache hit at address {address}\n")
+            else:
+                log_file.write(f"Cache miss at address {address}\n")
+                if block["dirty_bit"] == 1:
+                    log_file.write(f"Evicting dirty block {block['address']} to memory\n")
+                block["address"] = address
+                block["dirty_bit"] = 0
+
+                if __name__ == "__main__":
+                    # Testare citire fișier
+                    file_path = "cale/catre/fisier.trc"  # Înlocuiește cu calea reală
+                    try:
+                        instructions = parse_file(file_path)
+                        print(f"Fișierul a fost citit cu succes. Număr de instrucțiuni: {len(instructions)}")
+                        print("Primele 5 instrucțiuni:")
+                        for instr in instructions[:5]:  # Afișează primele 5 instrucțiuni
+                            print(f"Tip: {instr.tip_instructiune}, PC: {instr.pc_curent}, Adresă: {instr.address}")
+                    except Exception as e:
+                        print(f"Eroare la citirea fișierului: {e}")
 
 
 if __name__ == "__main__":
