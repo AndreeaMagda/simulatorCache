@@ -259,12 +259,13 @@ class CacheSimulatorApp:
                         elif instr.tip_instructiune == 'S':
                             nr_store += 1
                             self.simulate_write(cache, instr.address, write_policy, cache_log)
-                        elif instr.tip_instructiune in ['BS', 'BM', 'BT', 'NT', 'BR','B']:
+                        elif instr.tip_instructiune in ['BS', 'BM', 'BT', 'NT', 'B']:
                             nr_branch += 1
 
                 log_file.write(
                     f"Executed {executed_count} instructions from IBS. IBS size after execution: {len(self.ibs)}\n")
 
+            # Calculate issue rate
             issue_rate = executed_instructions / ticks if ticks > 0 else 0
             log_file.write(f"\nExecution completed in {ticks} ticks.\n")
             log_file.write(f"Total executed instructions: {executed_instructions}\n")
@@ -288,6 +289,9 @@ class CacheSimulatorApp:
 
             self.total_entry.delete(0, tk.END)
             self.total_entry.insert(0, str(executed_instructions))
+
+            self.issue_rate_entry.delete(0, tk.END)
+            self.issue_rate_entry.insert(0, f"{issue_rate:.2f}")
 
 
 if __name__ == "__main__":
