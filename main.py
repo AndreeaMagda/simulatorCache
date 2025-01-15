@@ -107,26 +107,34 @@ class CacheSimulatorApp:
         )
         self.write_back_radio.grid(row=3, column=2, sticky="w")
 
-        # Lista  de instrucțiuni
-        instruction_list_frame = ttk.LabelFrame(root, text="Lista Instrucţiuni")
-        instruction_list_frame.grid(row=3, column=0, columnspan=2, padx=10, pady=10, sticky="nsew")
-
-        self.instruction_listbox = tk.Listbox(instruction_list_frame, height=10, width=50)
-        self.instruction_listbox.grid(row=0, column=0, sticky="nsew")
 
     def simulate_write(self, cache, address, write_policy, cache_log):
+
         block_index = address % len(cache)
         block = cache[block_index]
 
         if write_policy == "write-through":
+            # Write-through: Write data to both cache and memory
+            block["address"] = address
+            block["dirty_bit"] = 0
             cache_log.write(f"Write-through: Writing to cache and memory at address {address}\n")
+
         elif write_policy == "write-back":
-            if block["address"] is not None and block["address"] != address and block["dirty_bit"] == 1:
-                cache_log.write(f"Evicting dirty block {block['address']} to memory\n")
+            # Write-back: Write data only to cache, set dirty bit
+            if block["address"] is not None and block["address"] != address:
+                if block["dirty_bit"] == 1:
+                    cache_log.write(f"Evicting dirty block with address {block['address']} to memory\n")
+                else:
+                    cache_log.write(f"Evicting clean block with address {block['address']} (no write-back needed)\n")
+
+
+            block["address"] = address
             block["dirty_bit"] = 1
             cache_log.write(f"Write-back: Writing to cache at address {address}\n")
 
-        block["address"] = address
+        else:
+
+            raise ValueError(f"Unknown write policy: {write_policy}")
 
     def simulate_read(self, cache, address, cache_log):
         block_index = address % len(cache)
@@ -136,60 +144,63 @@ class CacheSimulatorApp:
             cache_log.write(f"Cache hit at address {address}\n")
         else:
             cache_log.write(f"Cache miss at address {address}\n")
-            if block["dirty_bit"] == 1:
-                cache_log.write(f"Evicting dirty block {block['address']} to memory\n")
+            if block["dirty_bit"] == 1:  # Write-back specific logic
+                cache_log.write(f"Evicting dirty block with address {block['address']} to memory\n")
             block["address"] = address
             block["dirty_bit"] = 0
 
     def generate_graphs(self):
         block_sizes = [4, 8, 16, 32]
-        hit_rates = []
-        miss_rates = []
+        policies = ["write-through", "write-back"]
 
-        for block_size in block_sizes:
-            hits, misses = self.simulate_for_block_size(block_size)
-            total = hits + misses
-            hit_rates.append(hits / total if total > 0 else 0)
-            miss_rates.append(misses / total if total > 0 else 0)
+        for policy in policies:
+            hit_rates = []
+            miss_rates = []
 
-        # Grafic Rata de Hit
-        plt.figure()
-        plt.plot(block_sizes, hit_rates, marker="o")
-        plt.title("Rata de Hit în funcție de Block Size")
-        plt.xlabel("Dimensiunea Blocului")
-        plt.ylabel("Rata de Hit")
-        plt.grid()
-        plt.show()
+            for block_size in block_sizes:
+                hit_rate, miss_rate = self.simulate_for_block_size(block_size, policy)
+                hit_rates.append(hit_rate)
+                miss_rates.append(miss_rate)
 
-        # Grafic Rata de Miss
-        plt.figure()
-        plt.plot(block_sizes, miss_rates, marker="o")
-        plt.title("Rata de Miss în funcție de Block Size")
-        plt.xlabel("Dimensiunea Blocului")
-        plt.ylabel("Rata de Miss")
-        plt.grid()
-        plt.show()
+            plt.figure()
+            plt.plot(block_sizes, hit_rates, marker="o", label=f"Hit Rate ({policy})")
+            plt.plot(block_sizes, miss_rates, marker="o", label=f"Miss Rate ({policy})")
+            plt.title(f"Performance Metrics for {policy.capitalize()}")
+            plt.xlabel("Block Size")
+            plt.ylabel("Rate")
+            plt.grid()
+            plt.legend()
+            plt.show()
 
-    def simulate_for_block_size(self, block_size):
-        # Simulare simplificată pentru dimensiuni diferite de blocuri
+    def simulate_for_block_size(self, block_size, write_policy):
+
         hits = 0
         misses = 0
         cache = [{"address": None, "dirty_bit": 0} for _ in range(block_size)]
 
         for instr in self.instructions:
             address = instr.address
-            block_index = address % len(cache)
+            block_index = address % block_size
             block = cache[block_index]
 
             if block["address"] == address:
                 hits += 1
             else:
                 misses += 1
+                if block["address"] is not None:
+                    if write_policy == "write-back" and block["dirty_bit"] == 1:
+                        print(f"Evicting dirty block at address {block['address']} (write-back)")
+                    elif write_policy == "write-through":
+                        print(f"Evicting block at address {block['address']} (write-through)")
+
                 block["address"] = address
                 block["dirty_bit"] = 0
 
-        return hits, misses
+            if instr.tip_instructiune == 'S':
+                if write_policy == "write-back":
+                    block["dirty_bit"] = 1
 
+        return hits, misses
     def choose_file(self):
         self.file_path = filedialog.askopenfilename()
         print(f"Fişier selectat: {self.file_path}")
@@ -212,17 +223,16 @@ class CacheSimulatorApp:
             write_policy = self.write_policy_var.get()
 
             ticks = 0
-            fetched_instructions = []
-
-            FR = int(self.fr_combobox.get())
-            IR = int(self.irmax_combobox.get())
-            IBS = int(self.ibs_combobox.get())
-            self.ibs = []
             executed_instructions = 0
 
             nr_load = 0
             nr_store = 0
             nr_branch = 0
+
+            FR = int(self.fr_combobox.get())
+            IR = int(self.irmax_combobox.get())
+            IBS = int(self.ibs_combobox.get())
+            self.ibs = []
 
             while self.instructions or self.ibs:
                 ticks += 1
@@ -230,7 +240,7 @@ class CacheSimulatorApp:
                 log_file.write(f"Cache size before fetch: {len(self.instructions)}\n")
                 log_file.write(f"IBS size before fetch: {len(self.ibs)}\n")
 
-                # Fetch instructions
+
                 fetched_count = 0
                 while len(self.ibs) < IBS and self.instructions:
                     for _ in range(FR):
@@ -239,11 +249,11 @@ class CacheSimulatorApp:
                             self.ibs.append(instr)
                             fetched_count += 1
                             log_file.write(
-                                f"Fetched: {instr.tip_instructiune}, PC: {instr.pc_curent}, Address: {instr.address}\n")
+                                f"Fetched: {instr.tip_instructiune}, PC: {instr.pc_curent}, Address: {instr.address}\n"
+                            )
 
                 log_file.write(f"Fetched {fetched_count} instructions into IBS. IBS size: {len(self.ibs)}\n")
 
-                # Execute instructions
                 executed_count = 0
                 for _ in range(IR):
                     if self.ibs:
@@ -251,7 +261,8 @@ class CacheSimulatorApp:
                         executed_count += 1
                         executed_instructions += 1
                         log_file.write(
-                            f"Executed: {instr.tip_instructiune}, PC: {instr.pc_curent}, Address: {instr.address}\n")
+                            f"Executed: {instr.tip_instructiune}, PC: {instr.pc_curent}, Address: {instr.address}\n"
+                        )
 
                         if instr.tip_instructiune == 'L':
                             nr_load += 1
@@ -263,9 +274,9 @@ class CacheSimulatorApp:
                             nr_branch += 1
 
                 log_file.write(
-                    f"Executed {executed_count} instructions from IBS. IBS size after execution: {len(self.ibs)}\n")
+                    f"Executed {executed_count} instructions from IBS. IBS size after execution: {len(self.ibs)}\n"
+                )
 
-            # Calculate issue rate
             issue_rate = executed_instructions / ticks if ticks > 0 else 0
             log_file.write(f"\nExecution completed in {ticks} ticks.\n")
             log_file.write(f"Total executed instructions: {executed_instructions}\n")
@@ -274,7 +285,7 @@ class CacheSimulatorApp:
             print(f"\nExecution completed in {ticks} cycles.")
             print(f"Issue Rate: {issue_rate:.2f}")
 
-            # Update UI fields
+
             self.ticks_entry.delete(0, tk.END)
             self.ticks_entry.insert(0, str(ticks))
 
@@ -292,6 +303,8 @@ class CacheSimulatorApp:
 
             self.issue_rate_entry.delete(0, tk.END)
             self.issue_rate_entry.insert(0, f"{issue_rate:.2f}")
+
+            self.generate_graphs()
 
 
 if __name__ == "__main__":
