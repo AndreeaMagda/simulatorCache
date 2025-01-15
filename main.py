@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, filedialog
 from instructiune import parse_file
-
+import matplotlib.pyplot as plt
 
 
 class CacheSimulatorApp:
@@ -88,8 +88,10 @@ class CacheSimulatorApp:
         self.file_button.grid(row=0, column=0, padx=5)
         self.start_button = ttk.Button(button_frame, text="Start Simulare", command=self.start_simulation)
         self.start_button.grid(row=0, column=1, padx=5)
+        self.graph_button = ttk.Button(button_frame, text="Generează Grafice", command=self.generate_graphs)
+        self.graph_button.grid(row=0, column=2, padx=5)
         self.exit_button = ttk.Button(button_frame, text="Exit", command=root.quit)
-        self.exit_button.grid(row=0, column=2, padx=5)
+        self.exit_button.grid(row=0, column=3, padx=5)
 
         self.file_path = None
 
@@ -106,25 +108,87 @@ class CacheSimulatorApp:
         self.write_back_radio.grid(row=3, column=2, sticky="w")
 
         # Lista  de instrucțiuni
-        instruction_list_frame = ttk.LabelFrame(root, text="Lista Instrucțiuni")
+        instruction_list_frame = ttk.LabelFrame(root, text="Lista Instrucţiuni")
         instruction_list_frame.grid(row=3, column=0, columnspan=2, padx=10, pady=10, sticky="nsew")
 
         self.instruction_listbox = tk.Listbox(instruction_list_frame, height=10, width=50)
         self.instruction_listbox.grid(row=0, column=0, sticky="nsew")
 
-    def simulate_write(self, cache, address, write_policy, data):
+    def simulate_write(self, cache, address, write_policy, cache_log):
+        block_index = address % len(cache)
+        block = cache[block_index]
+
         if write_policy == "write-through":
-            # Scrie direct în memorie și actualizează cache-ul
-            print(f"Write-through: Scriere la adresa {address}")
-            # Aici adaugi logica de scriere
+            cache_log.write(f"Write-through: Writing to cache and memory at address {address}\n")
         elif write_policy == "write-back":
-            # Marchează cache-ul ca fiind murdar și scrie doar când este necesar
-            print(f"Write-back: Scriere la adresa {address}")
-            # Aici adaugi logica de scriere
+            if block["address"] is not None and block["address"] != address and block["dirty_bit"] == 1:
+                cache_log.write(f"Evicting dirty block {block['address']} to memory\n")
+            block["dirty_bit"] = 1
+            cache_log.write(f"Write-back: Writing to cache at address {address}\n")
+
+        block["address"] = address
+
+    def simulate_read(self, cache, address, cache_log):
+        block_index = address % len(cache)
+        block = cache[block_index]
+
+        if block["address"] == address:
+            cache_log.write(f"Cache hit at address {address}\n")
         else:
-            raise ValueError(f"Politica de scriere necunoscută: {write_policy}")
+            cache_log.write(f"Cache miss at address {address}\n")
+            if block["dirty_bit"] == 1:
+                cache_log.write(f"Evicting dirty block {block['address']} to memory\n")
+            block["address"] = address
+            block["dirty_bit"] = 0
 
+    def generate_graphs(self):
+        block_sizes = [4, 8, 16, 32]
+        hit_rates = []
+        miss_rates = []
 
+        for block_size in block_sizes:
+            hits, misses = self.simulate_for_block_size(block_size)
+            total = hits + misses
+            hit_rates.append(hits / total if total > 0 else 0)
+            miss_rates.append(misses / total if total > 0 else 0)
+
+        # Grafic Rata de Hit
+        plt.figure()
+        plt.plot(block_sizes, hit_rates, marker="o")
+        plt.title("Rata de Hit în funcție de Block Size")
+        plt.xlabel("Dimensiunea Blocului")
+        plt.ylabel("Rata de Hit")
+        plt.grid()
+        plt.show()
+
+        # Grafic Rata de Miss
+        plt.figure()
+        plt.plot(block_sizes, miss_rates, marker="o")
+        plt.title("Rata de Miss în funcție de Block Size")
+        plt.xlabel("Dimensiunea Blocului")
+        plt.ylabel("Rata de Miss")
+        plt.grid()
+        plt.show()
+
+    def simulate_for_block_size(self, block_size):
+        # Simulare simplificată pentru dimensiuni diferite de blocuri
+        hits = 0
+        misses = 0
+        cache = [{"address": None, "dirty_bit": 0} for _ in range(block_size)]
+
+        for instr in self.instructions:
+            address = instr.address
+            block_index = address % len(cache)
+            block = cache[block_index]
+
+            if block["address"] == address:
+                hits += 1
+            else:
+                misses += 1
+                block["address"] = address
+                block["dirty_bit"] = 0
+
+        return hits, misses
 
     def choose_file(self):
         self.file_path = filedialog.askopenfilename()
@@ -135,166 +199,29 @@ class CacheSimulatorApp:
             print("Niciun fişier selectat!")
             return
 
-        self.cache = parse_file(self.file_path)
-        self.ibs = []
-        cache = [{"address": None, "dirty_bit": 0} for _ in range(16)]  # Cache simplu cu 16 blocuri
-        write_policy = self.write_policy_var.get()  # Selectează politica de scriere (write-through/write-back)
-
-        FR = int(self.fr_combobox.get())
-        IR = int(self.irmax_combobox.get())
-        IBS = int(self.ibs_combobox.get())
-        self.process_instructions(FR, IR, IBS)
-
-        TICKS = 0
-        nrInstrProcesate = 0
-        nrBranchProcesate = 0
-        nrStoreProcesate = 0
-        nrLoadProcesate = 0
-
         self.instructions = parse_file(self.file_path)
         self.instruction_listbox.delete(0, tk.END)
 
-        for instr in self.instructions:
-            display_text = f"{instr.tip_instructiune} - PC: {instr.pc_curent}, Address: {instr.address}"
-            self.instruction_listbox.insert(tk.END, display_text)
-
-        nrInstrProcesate = len(self.instructions)
-        nrBranchProcesate = sum(
-            1 for instr in self.instructions if instr.tip_instructiune in ['BS', 'BM', 'BT', 'NT', 'BR'])
-        nrStoreProcesate = sum(1 for instr in self.instructions if instr.tip_instructiune == 'S')
-        nrLoadProcesate = sum(1 for instr in self.instructions if instr.tip_instructiune == 'L')
-
-        # Inițializează cache-ul și preia politica de scriere selectată
-        cache = [{"address": None, "dirty_bit": 0} for _ in range(16)]  # Cache simplu cu 16 blocuri
-        write_policy = self.write_policy_var.get()  # Selectează politica de scriere (write-through/write-back)
-        TICKS = 0
-
-        # Parcurge instrucțiunile
-        for instr in self.instructions:
-            if instr.tip_instructiune in ['BS', 'BM', 'BT', 'NT', 'BR']:
-                TICKS += 1  # Alte tipuri de instrucțiuni, incrementăm doar TICKS
-            elif instr.tip_instructiune == 'S':  # Instrucțiune de scriere
-                self.simulate_write(cache, instr.address, write_policy, None)
-                TICKS += 1
-            elif instr.tip_instructiune == 'L':  # Instrucțiune de citire
-                self.simulate_read(cache, instr.address, None)
-                TICKS += 1
-
-        self.ticks_entry.delete(0, tk.END)
-        self.ticks_entry.insert(0, str(TICKS))
-
-        self.load_entry.delete(0, tk.END)
-        self.load_entry.insert(0, str(nrLoadProcesate))
-
-        self.store_entry.delete(0, tk.END)
-        self.store_entry.insert(0, str(nrStoreProcesate))
-
-        self.branch_entry.delete(0, tk.END)
-        self.branch_entry.insert(0, str(nrBranchProcesate))
-
-        self.total_entry.delete(0, tk.END)
-        self.total_entry.insert(0, str(nrInstrProcesate))
-
-    def process_instructions(self, FR, IR, IBS):
-        TICKS = 0
-        executed_instructions = 0  
-
-        with open("log.txt", "w") as log_file:
+        with open("log.txt", "w") as log_file, open("cachelog.txt", "w") as cache_log:
             log_file.write("Simulation Log:\n")
             log_file.write("=================\n")
 
-            while self.cache or self.ibs:
-                log_file.write(f"\n--- TICK {TICKS + 1} ---\n")
-                log_file.write(f"Cache size before fetch: {len(self.cache)}\n")
-                log_file.write(f"IBS size before fetch: {len(self.ibs)}\n")
+            cache_log.write("Cache Access Log:\n")
+            cache_log.write("=================\n")
 
-                print(f"\n--- TICK {TICKS + 1} ---")
-                print(f"Cache size before fetch: {len(self.cache)}")
-                print(f"IBS size before fetch: {len(self.ibs)}")
+            cache = [{"address": None, "dirty_bit": 0} for _ in range(16)]
+            write_policy = self.write_policy_var.get()
 
-                # Fetch instrucțiuni
-                fetched_count = 0
-                while len(self.ibs) < IBS and self.cache:
-                    for _ in range(FR):
-                        if self.cache and len(self.ibs) < IBS:
-                            instr = self.cache.pop(0)
-                            self.ibs.append(instr)
-                            fetched_count += 1
-                            log_file.write(
-                                f"Fetched: {instr.tip_instructiune}, PC: {instr.pc_curent}, Address: {instr.address}\n")
+            for instr in self.instructions:
+                if instr.tip_instructiune == "S":  # Store
+                    self.simulate_write(cache, instr.address, write_policy, cache_log)
+                elif instr.tip_instructiune == "L":  # Load
+                    self.simulate_read(cache, instr.address, cache_log)
 
-                log_file.write(f"Fetched {fetched_count} instructions into IBS. IBS size: {len(self.ibs)}\n")
+                display_text = f"{instr.tip_instructiune} - PC: {instr.pc_curent}, Address: {instr.address}"
+                self.instruction_listbox.insert(tk.END, display_text)
 
-                # Execute instrucțiuni
-                executed_count = 0
-                for _ in range(IR):
-                    if self.ibs:
-                        instr = self.ibs.pop(0)
-                        executed_count += 1
-                        executed_instructions += 1
-                        print(f"Executed: {instr.tip_instructiune}, PC: {instr.pc_curent}, Address: {instr.address}")
-                        log_file.write(
-                            f"Executed: {instr.tip_instructiune}, PC: {instr.pc_curent}, Address: {instr.address}\n")
-
-                log_file.write(
-                    f"Executed {executed_count} instructions from IBS. IBS size after execution: {len(self.ibs)}\n")
-
-                TICKS += 1
-
-
-            issue_rate = executed_instructions / TICKS if TICKS > 0 else 0
-            log_file.write(f"\nExecution completed in {TICKS} cycles.\n")
-            log_file.write(f"Total executed instructions: {executed_instructions}\n")
-            log_file.write(f"Issue Rate: {issue_rate:.2f}\n")
-
-
-            self.issue_rate_entry.delete(0, tk.END)
-            self.issue_rate_entry.insert(0, f"{issue_rate:.2f}")
-
-        print(f"\nExecution completed in {TICKS} cycles.")
-        print(f"Issue Rate: {issue_rate:.2f}")
-
-
-
-        def simulate_write(self, cache, address, write_policy, log_file):
-            block_index = address % len(cache)
-            block = cache[block_index]
-
-            if write_policy == "write-through":
-                log_file.write(f"Write-through: Writing to cache and memory at address {address}\n")
-            elif write_policy == "write-back":
-                if block["address"] is not None and block["address"] != address and block["dirty_bit"] == 1:
-                    log_file.write(f"Evicting dirty block {block['address']} to memory\n")
-                block["dirty_bit"] = 1
-                log_file.write(f"Write-back: Writing to cache at address {address}\n")
-
-            block["address"] = address
-
-        def simulate_read(self, cache, address, log_file):
-            block_index = address % len(cache)
-            block = cache[block_index]
-
-            if block["address"] == address:
-                log_file.write(f"Cache hit at address {address}\n")
-            else:
-                log_file.write(f"Cache miss at address {address}\n")
-                if block["dirty_bit"] == 1:
-                    log_file.write(f"Evicting dirty block {block['address']} to memory\n")
-                block["address"] = address
-                block["dirty_bit"] = 0
-
-                if __name__ == "__main__":
-                    # Testare citire fișier
-                    file_path = "cale/catre/fisier.trc"  # Înlocuiește cu calea reală
-                    try:
-                        instructions = parse_file(file_path)
-                        print(f"Fișierul a fost citit cu succes. Număr de instrucțiuni: {len(instructions)}")
-                        print("Primele 5 instrucțiuni:")
-                        for instr in instructions[:5]:  # Afișează primele 5 instrucțiuni
-                            print(f"Tip: {instr.tip_instructiune}, PC: {instr.pc_curent}, Adresă: {instr.address}")
-                    except Exception as e:
-                        print(f"Eroare la citirea fișierului: {e}")
-
+        self.generate_graphs()
 
 if __name__ == "__main__":
     root = tk.Tk()
